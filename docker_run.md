@@ -27,4 +27,6 @@ make -j8
 
 cd $WORKSPACE/aimet/build
 make install
+
+export PYTHONPATH=$WORKSPACE/aimet/build/staging/universal/lib/python:$PYTHONPATH
 ```
