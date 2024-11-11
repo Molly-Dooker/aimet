@@ -8,12 +8,26 @@ export docker_container_name=sungmin_aimet_cuda12
 docker build -t ${docker_image_name} -f $WORKSPACE/aimet/Jenkins/Dockerfile.${AIMET_VARIANT} .
 
 # 도커 런
-docker run -it --gpus all --name ${docker_container_name} -u $(id -u ${USER}):$(id -g ${USER}) \
-  -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro \
-  -v ${HOME}:${HOME} -v ${WORKSPACE}:${WORKSPACE} \
+docker run -it \
+  --name ${docker_container_name} \
+  -v /etc/passwd:/etc/passwd:ro \
+  -v /etc/group:/etc/group:ro \
+  -v ${WORKSPACE}:${WORKSPACE} \
+  -v ${HOME}:${HOME} \
+  -w ${WORKSPACE} \
   -v "/local/mnt/workspace":"/local/mnt/workspace" \
-  --entrypoint /bin/bash -w ${WORKSPACE} --hostname ${docker_container_name} ${docker_image_name}
- 
+  --gpus all \
+  --shm-size=128g \
+  --ipc=host \
+  --entrypoint /bin/bash \
+  --hostname ${docker_container_name} \
+  ${docker_image_name}
+
+
+# 일부 패키지 재설치
+pip install onnxruntime-gpu==1.18.0 --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ --force-reinstall
+pip install numpy==1.26.4
+
 # 도커안에서 빌드
 export WORKSPACE=$(pwd)
 source $WORKSPACE/aimet/packaging/envsetup.sh
@@ -32,5 +46,9 @@ export PYTHONPATH=$WORKSPACE/aimet/build/staging/universal/lib/python:$PYTHONPAT
 
 
 # or whl 만들어서 pip 으로 설치하기
+export WORKSPACE=$(pwd)
+cd $WORKSPACE/aimet/build
+make packageaimet
+pip install --no-deps  ...
 
 ```
