@@ -27,5 +27,10 @@ make -j8
 cd $WORKSPACE/aimet/build
 make install
 
+# 실행시마다
 export PYTHONPATH=$WORKSPACE/aimet/build/staging/universal/lib/python:$PYTHONPATH
+
+
+# or whl 만들어서 pip 으로 설치하기
+
 ```
