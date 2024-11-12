@@ -49,6 +49,7 @@ export PYTHONPATH=$WORKSPACE/aimet/build/staging/universal/lib/python:$PYTHONPAT
 export WORKSPACE=$(pwd)
 cd $WORKSPACE/aimet/build
 make packageaimet
-pip install --no-deps  ...
+cd packaging/dist/
+pip install "PACKAGE" --no-deps 
 
 ```
