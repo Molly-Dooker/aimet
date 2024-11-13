@@ -27,9 +27,7 @@ docker run -it \
   ${docker_image_name}
 
 
-# 일부 패키지 재설치
-pip install onnxruntime-gpu==1.18.0 --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ --force-reinstall
-pip install numpy==1.26.4
+
 
 # 도커안에서 빌드
 export WORKSPACE=$(pwd)
@@ -54,5 +52,9 @@ cd $WORKSPACE/aimet/build
 make packageaimet
 cd packaging/dist/
 pip install "PACKAGE" --no-deps 
+
+# 일부 패키지 재설치
+pip install onnxruntime-gpu==1.18.0 --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ --force-reinstall
+pip install numpy==1.26.4
 
 ```

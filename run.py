@@ -74,5 +74,12 @@ def pass_calibration_data(sim_model, use_cuda):
                 break
 
 
-ipdb.set_trace()
+
 forward_pass_callback = CallbackFunc(pass_calibration_data, use_cuda)
+eval_callback = CallbackFunc(ImageNetDataPipeline.evaluate, use_cuda)
+
+# enable mse loss per layer analysis
+data_loader = ImageNetDataPipeline.get_val_dataloader()
+dummy_input = torch.rand(1, 3, 224, 224)    # Shape for each ImageNet sample is (3 channels) x (224 height) x (224 width)
+if use_cuda:
+    dummy_input = dummy_input.cuda()
