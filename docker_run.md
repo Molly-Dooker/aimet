@@ -1,13 +1,15 @@
 ```
 # 도커 빌드
-export WORKSPACE=$(pwd)
 export AIMET_VARIANT=torch-gpu
+export WORKSPACE=$(pwd)
 export docker_image_name=donghn/aimet_torch:cuda12
 export docker_container_name=sungmin_aimet_cuda12
 
 docker build -t ${docker_image_name} -f $WORKSPACE/aimet/Jenkins/Dockerfile.${AIMET_VARIANT} .
 
 # 도커 런
+DATADIR=/data/dataset/
+
 docker run -it \
   --name ${docker_container_name} \
   -v /etc/passwd:/etc/passwd:ro \
@@ -16,6 +18,7 @@ docker run -it \
   -v ${HOME}:${HOME} \
   -w ${WORKSPACE} \
   -v "/local/mnt/workspace":"/local/mnt/workspace" \
+  -v $DATADIR:"/data/dataset/" \
   --gpus all \
   --shm-size=128g \
   --ipc=host \

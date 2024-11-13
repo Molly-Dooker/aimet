@@ -3,7 +3,7 @@ os.environ["HF_TOKEN"]="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"
 from datasets import load_dataset
 from collections import defaultdict
 from PIL import Image
-import ipdb
+
 
 # Hugging Face에서 ImageNet 데이터셋 로드
 dataset = load_dataset("zh-plus/tiny-imagenet",split='valid')
