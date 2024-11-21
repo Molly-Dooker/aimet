@@ -39,7 +39,7 @@ class ImageNetDataPipeline:
 
         return evaluator.evaluate(model, iterations=None, use_cuda=use_cuda)
 
-ipdb.set_trace()
+# ipdb.set_trace()
 
 
 model = resnet18(pretrained=True)

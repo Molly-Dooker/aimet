@@ -117,7 +117,7 @@ sim.compute_encodings(forward_pass_callback=pass_calibration_data,
                       forward_pass_callback_args=use_cuda)
 
 
-
+ipdb.set_trace()
 accuracy = ImageNetDataPipeline.evaluate(sim.model, use_cuda)
 print(accuracy)
 ipdb.set_trace()
