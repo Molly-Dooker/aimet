@@ -46,7 +46,7 @@ from torch import nn
 
 from Examples.common.utils import accuracy
 from Examples.torch.utils.image_net_data_loader import ImageNetDataLoader
-
+import ipdb
 logger = logging.getLogger('Eval')
 
 
@@ -100,7 +100,6 @@ class ImageNetEvaluator:
 
         logger.info("Evaluating nn.Module for %d iterations with batch_size %d",
                     iterations, self._val_data_loader.batch_size)
-
         model = model.to(device)
         model = model.eval()
 
