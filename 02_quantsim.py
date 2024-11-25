@@ -2,6 +2,7 @@ import ipdb
 import os, sys
 import torch
 import torch.nn.functional as F
+from torch.autograd.function import InplaceFunction, Function
 from Examples.common import image_net_config
 from Examples.torch.utils.image_net_evaluator import ImageNetEvaluator
 from Examples.torch.utils.image_net_trainer import ImageNetTrainer
@@ -14,57 +15,153 @@ from aimet_torch.quantsim import QuantizationSimModel
 from aimet_torch.qc_quantize_op import StaticGridQuantWrapper
 from functools import partial
 from tqdm import tqdm
+from collections import namedtuple 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 TEST_NUM = 100
-
 DATASET_DIR   = '/data/dataset/ImageNet_small'
 Calibrate_DIR = '/data/dataset/ImageNet_small'
+QParams = namedtuple('QParams', ['range', 'zero_point', 'num_bits'])
 
-
+cached_input_output = {}
 def hook(name,module, input, output):
     if module not in cached_input_output:
         cached_input_output[module] = []
-    # Meanwhile store data in the RAM.
     cached_input_output[module].append((input[0].detach().cpu(), output.detach().cpu()))
 
 
-def adaquant(layer, cached_inps, cached_outs, test_inp, test_out, lr1=1e-4, lr2=1e-2, iters=100, progress=True, batch_size=50):
-    ipdb.set_trace()
-    print("\nRun adaquant")
-    test_inp = test_inp.to('cuda'); test_out = test_out.to('cuda')
-    layer.eval()
-    
-    mse_before = F.mse_loss(layer._module_to_wrap(test_inp), test_out)
+class Round(InplaceFunction):
+    @staticmethod
+    def forward(ctx, input, inplace):
+        ctx.inplace = inplace                                                                          
+        if ctx.inplace:
+            ctx.mark_dirty(input)
+            output = input
+        else:
+            output = input.clone()
+        output.round_()
+        return output
+    @staticmethod
+    def backward(ctx, grad_output):
+        # straight-through estimator
+        grad_input = grad_output
+        return grad_input,None
 
+
+
+
+
+
+
+
+
+class wrapped_layer(torch.nn.Module):
+    def __init__(self, layer, act_quant_first, act_range, act_zero_point, w_range, w_zero_point, b_range, b_zero_point):
+        super(wrapped_layer, self).__init__()
+        self.layer = layer
+        self.act_quant_first = act_quant_first
+        self.act_range = act_range
+        self.act_zero_point = act_zero_point
+        self.w_range = w_range
+        self.w_zero_point = w_zero_point
+        self.b_range = b_range
+        self.b_zero_point = b_zero_point
+    def forward(self, x):
+        ipdb.set_trace()
+        if self.act_quant_first:
+            x = self.qdq(x, self.act_zero_point, self.act_range, 8, signed=False)
+
+        w_ = self.qdq(self.layer._module_to_wrap.weight, self.w_zero_point, self.w_range, 8, signed=False)
+        b_ = self.qdq(self.layer._module_to_wrap.bias, self.b_zero_point, self.b_range, 8, signed=False) if self.layer._module_to_wrap.bias is not None else self.layer._module_to_wrap.bias
+        x = self.layer._module_to_wrap(x)
+
+        if not self.act_quant_first:
+            x = self.qdq(x, self.act_zero_point, self.act_range, 8, signed=True)
+        return x
+    
+    def qdq(self, input, zero_point, range, num_bits, signed= False):
+        output = input.clone() 
+        qmin = -(2.**(num_bits - 1)) if signed else 0.
+        qmax = qmin + 2.**num_bits - 1.
+        # ZP quantization for HW compliance
+        running_range=range.clamp(min=1e-6,max=1e5)
+        scale = running_range / (qmax - qmin)
+        running_zero_point_round = Round().apply(qmin-zero_point/scale,False)
+        zero_point = (qmin-running_zero_point_round.clamp(qmin,qmax))*scale
+        output.add_(qmin * scale - zero_point).div_(scale)
+        output = Round().apply(output.clamp_(qmin, qmax),False)
+        # if dequantize:
+        output.mul_(scale).add_(zero_point - qmin * scale)
+        return output
+
+
+def adaquant(layer, cached_inps, cached_Qouts, iters=100, progress=True, batch_size=50):
+    
+    # qdq params
+    act_quant_first = False
+
+    act_range = None
+    act_zero_point = None
+
+    w_range = None
+    w_zero_point = None
+
+    b_range = None
+    b_zero_point = None
+    opt_bias = None
+
+    # lr params
     # lr_factor = 1e-2
-    # Those hyperparameters tuned for 8 bit and checked on mobilenet_v2 and resnet50
-    # Have to verify on other bit-width and other models
     lr_qpin = 1e-1# lr_factor * (test_inp.max() - test_inp.min()).item()  # 1e-1
-    lr_qpw = 1e-3#lr_factor * (layer.weight.max() - layer.weight.min()).item()  # 1e-3
+    lr_qpw = 1e-3#lr_factor * (layer._module_to_wrap.weight.max() - layer._module_to_wrap.weight.min()).item()  # 1e-3
     lr_w = 1e-5#lr_factor * layer.weight.std().item()  # 1e-5
     lr_b = 1e-3#lr_factor * layer.bias.std().item()  # 1e-3
 
-    opt_w = torch.optim.Adam([layer.weight], lr=lr_w)
-    if hasattr(layer, 'bias') and layer.bias is not None: opt_bias = torch.optim.Adam([layer.bias], lr=lr_b)
-    opt_qparams_in = torch.optim.Adam([layer.quantize_input.running_range,
-                                       layer.quantize_input.running_zero_point], lr=lr_qpin)
-    opt_qparams_w = torch.optim.Adam([layer.quantize_weight.running_range,
-                                      layer.quantize_weight.running_zero_point], lr=lr_qpw)
 
-    losses = []
-    for j in (tqdm(range(iters)) if progress else range(iters)):
+    if layer.input_quantizers[0].encoding is not None:
+        act_quant_first = True
+        act_range      = torch.tensor([[[[layer.input_quantizers[0].encoding.max-layer.input_quantizers[0].encoding.min]]]], dtype=torch.float32, requires_grad=True)
+        act_zero_point = torch.tensor([[[[layer.input_quantizers[0].encoding.offset]]]], dtype=torch.float32, requires_grad=True)
+    else:
+        act_quant_first = False
+        act_range      = torch.tensor([[[[layer.output_quantizers[0].encoding.max-layer.output_quantizers[0].encoding.min]]]], dtype=torch.float32, requires_grad=True)
+        act_zero_point = torch.tensor([[[[layer.output_quantizers[0].encoding.offset]]]], dtype=torch.float32, requires_grad=True)
+
+    w_range = torch.tensor([[[[layer.param_quantizers['weight'].encoding.max-layer.param_quantizers['weight'].encoding.min]]]], dtype=torch.float32, requires_grad=True)
+    w_zero_point = torch.tensor([[[[layer.param_quantizers['weight'].encoding.offset]]]], dtype=torch.float32, requires_grad=True)  
+
+    if layer.param_quantizers['bias'].encoding is not None:
+        b_range = torch.tensor([[[[layer.param_quantizers['bias'].encoding.max-layer.param_quantizers['bias'].encoding.min]]]], dtype=torch.float32, requires_grad=True)
+        b_zero_point = torch.tensor([[[[layer.param_quantizers['bias'].encoding.offset]]]], dtype=torch.float32, requires_grad=True)    
+  
+    layer.eval()
+    ipdb.set_trace()
+    cached_inps = cached_inps.to(layer._module_to_wrap.weight.device)
+    cached_Qouts= cached_Qouts.to(layer._module_to_wrap.weight.device)
+    with torch.no_grad(): 
+        cached_outs = layer._module_to_wrap(cached_inps)
+    mse_before = F.mse_loss(cached_outs, cached_Qouts)
+
+    opt_w = torch.optim.Adam([layer._module_to_wrap.weight], lr=lr_w)
+    if b_range is not None: opt_bias = torch.optim.Adam([layer._module_to_wrap.bias], lr=lr_b)
+    opt_qparams_in = torch.optim.Adam([act_range, act_zero_point], lr=lr_qpin)
+    opt_qparams_w = torch.optim.Adam([w_range, w_zero_point], lr=lr_qpw)
+
+
+    layer_ = wrapped_layer(layer, act_quant_first, act_range, act_zero_point, w_range, w_zero_point, b_range, b_zero_point)
+
+
+    for j in (tqdm(range(iters))):
         idx = torch.randperm(cached_inps.size(0))[:batch_size]
 
         train_inp = cached_inps[idx]#.cuda()
-        train_out = cached_outs[idx]#.cuda()
-
-        qout = layer(train_inp)
+        train_out = cached_outs[idx]#.cuda() # normal result
+        ipdb.set_trace()
+        qout = layer_(train_inp) # quantized result
         loss = F.mse_loss(qout, train_out)
 
-        losses.append(loss.item())
         opt_w.zero_grad()
         if hasattr(layer, 'bias') and layer.bias is not None: opt_bias.zero_grad()
         opt_qparams_in.zero_grad()
@@ -74,16 +171,6 @@ def adaquant(layer, cached_inps, cached_outs, test_inp, test_out, lr1=1e-4, lr2=
         if hasattr(layer, 'bias') and layer.bias is not None: opt_bias.step()
         opt_qparams_in.step()
         opt_qparams_w.step()
-
-            # if len(losses) < 10:
-            #     total_loss = loss.item()
-            # else:
-            #     total_loss = np.mean(losses[-10:])
-            # print("mse out: {}, pc mean loss: {}, total: {}".format(mse_out.item(), mean_loss.item(), total_loss))
-
-    mse_after = F.mse_loss(layer(test_inp), test_out)
-    return mse_before.item(), mse_after.item()
-
 
 class ImageNetDataPipeline:
 
@@ -165,27 +252,27 @@ if torch.cuda.is_available():
 
 _ = fold_all_batch_norms(model, input_shapes=(1, 3, 224, 224))
 dummy_input = torch.rand(1, 3, 224, 224)    # Shape for each ImageNet sample is (3 channels) x (224 height) x (224 width)
-if use_cuda:    dummy_input = dummy_input.cuda()
+if use_cuda: dummy_input = dummy_input.cuda()
 sim = QuantizationSimModel(model=model,
                            quant_scheme=QuantScheme.post_training_tf_enhanced,
                            dummy_input=dummy_input,
                            default_output_bw=8,
                            default_param_bw=8)
-# ipdb.set_trace()
-mm = sim.model
-for node in mm.graph.nodes:
-    print(f"Node: {node.name}, Op: {node.op}")
+
+# mm = sim.model
+# for node in mm.graph.nodes:
+#     print(f"Node: {node.name}, Op: {node.op}")
     
-    # 입력 노드 확인
-    print("  Inputs:")
-    for arg in node.args:
-        if isinstance(arg, torch.fx.Node):
-            print(f"    - {arg.name}")
+#     # 입력 노드 확인
+#     print("  Inputs:")
+#     for arg in node.args:
+#         if isinstance(arg, torch.fx.Node):
+#             print(f"    - {arg.name}")
     
-    # 출력 노드 확인
-    print("  Outputs:")
-    for user in node.users:
-        print(f"    - {user.name}")
+#     # 출력 노드 확인
+#     print("  Outputs:")
+#     for user in node.users:
+#         print(f"    - {user.name}")
     
 
 sim.compute_encodings(forward_pass_callback=pass_calibration_data, forward_pass_callback_args=use_cuda)
@@ -196,28 +283,37 @@ sim.export(path='./output/', filename_prefix='resnet50_after_qat', dummy_input=d
 
 
 ##########################################################
-# handlers = []
-# cached_input_output = {}
+handlers = []
+for name,m in sim.model.named_modules():
+    if name =='': continue       
+    if not isinstance(m,StaticGridQuantWrapper): continue
+    if not (isinstance(m._module_to_wrap, torch.nn.Linear) or isinstance(m._module_to_wrap, torch.nn.Conv2d)): continue
+    # print(name)
+    handlers.append(m.register_forward_hook(partial(hook,name)))
+accuracy = ImageNetDataPipeline.evaluate(sim.model, use_cuda)
 
-# for name,m in sim.model.named_modules():    
-#     if name =='': continue       
-#     if not isinstance(m,StaticGridQuantWrapper): continue
-#     if not (isinstance(m._module_to_wrap, torch.nn.Linear) or isinstance(m._module_to_wrap, torch.nn.Conv2d)): continue
-#     # print(name)
-#     handlers.append(m.register_forward_hook(partial(hook,name)))
-# accuracy = ImageNetDataPipeline.evaluate(sim.model, use_cuda)
+for handler in handlers: handler.remove()
+for i, layer in enumerate(cached_input_output):
+    cached_inps  = torch.cat([x[0] for x in cached_input_output[layer]])
+    cached_outs = torch.cat([x[1] for x in cached_input_output[layer]])
+    mse_before, mse_after = adaquant(layer, cached_inps, cached_outs, iters=100)
 
-# for handler in handlers: handler.remove()
 
-# ipdb.set_trace()
-# for i, layer in enumerate(cached_input_output):
-#     data = cached_input_output[layer]
-#     cached_inps  = torch.cat([x[0] for x in data])
-#     cached_outs = torch.cat([x[1] for x in data])
-#     idx = torch.randperm(cached_inps.size(0))[:TEST_NUM]
-#     test_inp = cached_inps[idx]
-#     test_out = cached_outs[idx]
-#     mse_before, mse_after = adaquant(layer, cached_inps, cached_outs, test_inp, test_out, iters=100, lr1=1e-5, lr2=1e-4)
+# for layer in cached_input_output:
+#     iq = layer.input_quantizers[0].encoding
+#     oq = layer.output_quantizers[0].encoding
+#     wq = layer.param_quantizers['weight'].encoding
+#     bq = layer.param_quantizers['bias'].encoding
+
+#     print(layer)
+#     if iq.bw is not None:
+#         print(f'iq.')
+    
+
+
+
+
+
 
 # mm = sim.model.conv1
 # iq = mm.input_quantizers[0]
