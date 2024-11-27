@@ -43,6 +43,7 @@ cd $WORKSPACE/aimet/build
 make install
 
 # 실행시마다
+export WORKSPACE=$(pwd)
 export PYTHONPATH=$WORKSPACE/aimet/build/staging/universal/lib/python:$PYTHONPATH
 
 
