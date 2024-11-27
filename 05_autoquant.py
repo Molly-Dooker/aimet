@@ -160,7 +160,7 @@ def adaquant(layer, cached_inps, cached_Qouts, iters=100,  batch_size=50, signed
     b_range = None
     b_zero_point = None
     opt_bias = None
-
+    ipdb.set_trace()
     # lr params
     # lr_factor = 1e-2
     lr_qpin = 1e-1# lr_factor * (test_inp.max() - test_inp.min()).item()  # 1e-1
@@ -385,20 +385,21 @@ if __name__ == '__main__':
 
     modelname = 'mobilenet_v2'   
     logger.name= modelname
-    have_qunatmodel = False 
-    adaquant_repeat = 10
+    have_qunatmodel = True 
+    adaquant_repeat = 2
 
 
 
     model = getattr(models,modelname)(pretrained=True)
     model = prepare_model(model)
-    equalize_model(model, input_shapes=(1, 3, 224, 224))
+    # equalize_model(model, input_shapes=(1, 3, 224, 224))
     use_cuda = False
     if torch.cuda.is_available():
         use_cuda = True
         model.to(torch.device('cuda'))
     
     if not have_qunatmodel:      
+        print('>>>> original model')
         accuracy = ImageNetDataPipeline.evaluate(model, use_cuda)
         logger.info(f"original : {accuracy}")
 
@@ -413,6 +414,7 @@ if __name__ == '__main__':
                             default_param_bw=8)
     if not have_qunatmodel:                  
         sim.compute_encodings(forward_pass_callback=pass_calibration_data, forward_pass_callback_args=use_cuda)
+        print('>>>> quant model')
         accuracy = ImageNetDataPipeline.evaluate(sim.model, use_cuda)
         logger.info(f"quant    : {accuracy}")
         os.makedirs(f'./{modelname}/', exist_ok=True)
@@ -440,13 +442,15 @@ if __name__ == '__main__':
             cached_input_output[module].append((input[0].detach().cpu(), output.detach().cpu(),name))
 
         handlers = []
+        print('=========================')
         for name,m in sim.model.named_modules():
             if name =='': continue       
             if not isinstance(m,StaticGridQuantWrapper): continue
             if not (isinstance(m._module_to_wrap, torch.nn.Linear) or isinstance(m._module_to_wrap, torch.nn.Conv2d)): continue    
             QI,QO,QP = Qparam_checker(m)
-            if QI|QO == False : continue  
+            print(f'{name:30} param:{QP}, input:{QI}, output:{QO}')
             handlers.append(m.register_forward_hook(partial(hook,name)))
+        print('=========================')
         accuracy = ImageNetDataPipeline.preparing_adaquant(sim.model, use_cuda)
         for handler in handlers: handler.remove()
 
@@ -459,6 +463,7 @@ if __name__ == '__main__':
             mse_before, mse_after, improved = adaquant(layer, cached_inps, cached_outs, iters=100)
             print(f'{name}: mse_before:{mse_before}, mse_after:{mse_after}, improved:{improved}')
         # Quant+AdaQuant
+        print('>>>> adaquant model')
         accuracy = ImageNetDataPipeline.evaluate(sim.model, use_cuda)
         logger.info(f"adaquant : {accuracy}")
         # os.makedirs(f'./{modelname}_adaquant/', exist_ok=True)
