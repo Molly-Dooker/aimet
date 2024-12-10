@@ -1,0 +1,21 @@
+2024-11-28 09:39:24 - resnet50 - INFO - original : 76.05049273432518
+2024-11-28 09:43:23 - resnet50 - INFO - quant    : 75.5859375
+2024-11-28 10:01:57 - resnet50 - INFO - adaquant : 75.81513073979592
+2024-11-28 10:07:34 - resnet50 - INFO - adaquant : 75.74831826346261
+2024-11-28 10:16:24 - mobilenet_v2 - INFO - original : 71.64628126183335
+2024-11-28 10:20:19 - mobilenet_v2 - INFO - quant    : 68.39439454370616
+2024-11-28 10:24:57 - mobilenet_v2 - INFO - adaquant : 68.75417577003947
+2024-11-28 10:46:33 - mobilenet_v2 - INFO - quant    : 68.62083559620137
+2024-11-28 10:57:46 - mobilenet_v2 - INFO - quant    : 68.83218687407825
+2024-11-28 11:24:21 - mobilenet_v2 - INFO - adaquant : 70.03177385914083
+---------------
+2024-11-28 11:31:19 - mobilenet_v2 - INFO - quant    : 68.83218687407825
+2024-11-28 11:37:19 - mobilenet_v2 - INFO - adaquant : 69.99998100436464
+2024-11-28 11:43:26 - mobilenet_v2 - INFO - adaquant : 70.07296223543128
+2024-11-28 11:49:37 - mobilenet_v2 - INFO - adaquant : 69.86540712629046
+2024-11-28 23:02:16 - resnet50 - INFO - quant    : 75.66489768514828
+2024-11-28 23:09:20 - resnet50 - INFO - adaquant : 75.89608390963808
+2024-11-28 23:16:38 - resnet50 - INFO - adaquant : 75.92085382889728
+2024-11-28 23:23:50 - resnet50 - INFO - adaquant : 75.90690293604014
+2024-11-28 23:31:07 - resnet50 - INFO - adaquant : 75.88308202003947
+2024-11-28 23:38:25 - resnet50 - INFO - adaquant : 75.94087857616191

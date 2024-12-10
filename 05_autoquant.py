@@ -160,7 +160,6 @@ def adaquant(layer, cached_inps, cached_Qouts, iters=100,  batch_size=50, signed
     b_range = None
     b_zero_point = None
     opt_bias = None
-    ipdb.set_trace()
     # lr params
     # lr_factor = 1e-2
     lr_qpin = 1e-1# lr_factor * (test_inp.max() - test_inp.min()).item()  # 1e-1
@@ -213,8 +212,19 @@ def adaquant(layer, cached_inps, cached_Qouts, iters=100,  batch_size=50, signed
     layer.eval()
     cached_inps = cached_inps.to(layer._module_to_wrap.weight.device)
     cached_Qouts= cached_Qouts.to(layer._module_to_wrap.weight.device)
-    with torch.no_grad(): 
-        cached_outs = layer._module_to_wrap(cached_inps)
+
+
+    total_size = cached_inps.size(0)
+    output_shape = list(layer._module_to_wrap(cached_inps[:1]).shape)
+    output_shape[0] = total_size
+    cached_outs = torch.empty(output_shape, device=cached_inps.device)
+    BS = 500
+    with torch.no_grad():
+        for i in range(0, total_size, BS):
+            end = min(i + BS, total_size)
+            batch_input = cached_inps[i:end]
+            batch_output = layer._module_to_wrap(batch_input)
+            cached_outs[i:end] = batch_output
     mse_before = F.mse_loss(cached_outs, cached_Qouts)
 
     opt_w = torch.optim.Adam([layer._module_to_wrap.weight], lr=lr_w)
@@ -263,28 +273,52 @@ def adaquant(layer, cached_inps, cached_Qouts, iters=100,  batch_size=50, signed
     w_max        = (qmax+w_offset)*w_scale
     w_min        = (qmin+w_offset)*w_scale
 
+    if layer.input_quantizers[0].encoding is not None:
+        layer.input_quantizers[0].encoding.delta  = act_scale
+        layer.input_quantizers[0].encoding.offset = act_offset
+        layer.input_quantizers[0].encoding.max    = act_max
+        layer.input_quantizers[0].encoding.min    = act_min
+    else:
+        layer.output_quantizers[0].encoding.delta  = act_scale
+        layer.output_quantizers[0].encoding.offset = act_offset
+        layer.output_quantizers[0].encoding.max    = act_max
+        layer.output_quantizers[0].encoding.min    = act_min
+
+    layer.param_quantizers['weight'].encoding.delta  = w_scale
+    layer.param_quantizers['weight'].encoding.offset = w_offset
+    layer.param_quantizers['weight'].encoding.max    = w_max
+    layer.param_quantizers['weight'].encoding.min    = w_min
 
 
     layer.eval()
+    # with torch.no_grad():
+    #     mse_after = F.mse_loss(cached_outs, layer(cached_inps))
+    outputs_adaquant = []
     with torch.no_grad():
-        mse_after = F.mse_loss(cached_outs, layer(cached_inps))
+        for i in range(0, cached_inps.size(0), BS):
+            batch_inps = cached_inps[i:i + BS]  # 입력 데이터의 i부터 i+500까지 슬라이싱
+            batch_outs = layer(batch_inps)  # 현재 배치를 레이어에 통과
+            outputs_adaquant.append(batch_outs)  # 결과를 리스트에 추가
+        outputs_adaquant = torch.cat(outputs_adaquant, dim=0)
+        mse_after = F.mse_loss(cached_outs, outputs_adaquant)
+
 
     if mse_before.item() > mse_after.item(): # change only when mse after is better
-        if layer.input_quantizers[0].encoding is not None:
-            layer.input_quantizers[0].encoding.delta  = act_scale
-            layer.input_quantizers[0].encoding.offset = act_offset
-            layer.input_quantizers[0].encoding.max    = act_max
-            layer.input_quantizers[0].encoding.min    = act_min
-        else:
-            layer.output_quantizers[0].encoding.delta  = act_scale
-            layer.output_quantizers[0].encoding.offset = act_offset
-            layer.output_quantizers[0].encoding.max    = act_max
-            layer.output_quantizers[0].encoding.min    = act_min
+        # if layer.input_quantizers[0].encoding is not None:
+        #     layer.input_quantizers[0].encoding.delta  = act_scale
+        #     layer.input_quantizers[0].encoding.offset = act_offset
+        #     layer.input_quantizers[0].encoding.max    = act_max
+        #     layer.input_quantizers[0].encoding.min    = act_min
+        # else:
+        #     layer.output_quantizers[0].encoding.delta  = act_scale
+        #     layer.output_quantizers[0].encoding.offset = act_offset
+        #     layer.output_quantizers[0].encoding.max    = act_max
+        #     layer.output_quantizers[0].encoding.min    = act_min
 
-        layer.param_quantizers['weight'].encoding.delta  = w_scale
-        layer.param_quantizers['weight'].encoding.offset = w_offset
-        layer.param_quantizers['weight'].encoding.max    = w_max
-        layer.param_quantizers['weight'].encoding.min    = w_min
+        # layer.param_quantizers['weight'].encoding.delta  = w_scale
+        # layer.param_quantizers['weight'].encoding.offset = w_offset
+        # layer.param_quantizers['weight'].encoding.max    = w_max
+        # layer.param_quantizers['weight'].encoding.min    = w_min
         return mse_before, mse_after, True
     else:
         return mse_before, mse_after, False
@@ -383,12 +417,10 @@ def pass_calibration_data(sim_model, use_cuda):
 
 if __name__ == '__main__':
 
-    modelname = 'mobilenet_v2'   
+    modelname = 'resnet50'   
     logger.name= modelname
-    have_qunatmodel = True 
-    adaquant_repeat = 2
-
-
+    have_qunatmodel = False 
+    adaquant_repeat = 5
 
     model = getattr(models,modelname)(pretrained=True)
     model = prepare_model(model)
@@ -398,10 +430,10 @@ if __name__ == '__main__':
         use_cuda = True
         model.to(torch.device('cuda'))
     
-    if not have_qunatmodel:      
-        print('>>>> original model')
-        accuracy = ImageNetDataPipeline.evaluate(model, use_cuda)
-        logger.info(f"original : {accuracy}")
+    # if not have_qunatmodel:      
+    #     print('>>>> original model')
+    #     accuracy = ImageNetDataPipeline.evaluate(model, use_cuda)
+    #     logger.info(f"original : {accuracy}")
 
 
     _ = fold_all_batch_norms(model, input_shapes=(1, 3, 224, 224))
@@ -411,7 +443,8 @@ if __name__ == '__main__':
                             quant_scheme=QuantScheme.post_training_tf_enhanced,
                             dummy_input=dummy_input,
                             default_output_bw=8,
-                            default_param_bw=8)
+                            default_param_bw=8,
+                            config_file='config_aimet.json')
     if not have_qunatmodel:                  
         sim.compute_encodings(forward_pass_callback=pass_calibration_data, forward_pass_callback_args=use_cuda)
         print('>>>> quant model')
@@ -433,7 +466,8 @@ if __name__ == '__main__':
                                 quant_scheme=QuantScheme.post_training_tf_enhanced,
                                 dummy_input=dummy_input,
                                 default_output_bw=8,
-                                default_param_bw=8)
+                                default_param_bw=8,
+                                config_file='config_aimet.json')
         load_encodings_to_sim(sim,f'./{modelname}/{modelname}_after_qat_torch.encodings') 
         cached_input_output = {}
         def hook(name, module, input, output):
@@ -448,6 +482,7 @@ if __name__ == '__main__':
             if not isinstance(m,StaticGridQuantWrapper): continue
             if not (isinstance(m._module_to_wrap, torch.nn.Linear) or isinstance(m._module_to_wrap, torch.nn.Conv2d)): continue    
             QI,QO,QP = Qparam_checker(m)
+            if QI|QO == False : continue
             print(f'{name:30} param:{QP}, input:{QI}, output:{QO}')
             handlers.append(m.register_forward_hook(partial(hook,name)))
         print('=========================')
