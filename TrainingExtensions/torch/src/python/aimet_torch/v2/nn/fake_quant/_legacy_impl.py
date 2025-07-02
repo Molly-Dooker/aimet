@@ -318,7 +318,6 @@ _TORCH_NN_UNARY_MODULES = [
     nn.MultiLabelSoftMarginLoss,
     nn.MultiMarginLoss,
     nn.NLLLoss,
-    nn.NLLLoss2d,
     nn.PReLU,
     nn.PixelShuffle,
     nn.PixelUnshuffle,

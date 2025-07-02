@@ -184,7 +184,6 @@ API reference
     QuantizedMultiLabelSoftMarginLoss
     QuantizedMultiMarginLoss
     QuantizedNLLLoss
-    QuantizedNLLLoss2d
     QuantizedPReLU
     QuantizedPairwiseDistance
     QuantizedPixelShuffle

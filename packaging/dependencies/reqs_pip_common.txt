@@ -9,6 +9,6 @@ osqp
 pybind11
 PyYAML
 scikit-learn
-scipy==1.8.1
+scipy==1.15.3
 setuptools
 tqdm

@@ -198,7 +198,6 @@ torch.nn.MultiLabelMarginLoss                 QuantizedMultiLabelMarginLoss
 torch.nn.MultiLabelSoftMarginLoss             QuantizedMultiLabelSoftMarginLoss
 torch.nn.MultiMarginLoss                      QuantizedMultiMarginLoss
 torch.nn.NLLLoss                              QuantizedNLLLoss
-torch.nn.NLLLoss2d                            QuantizedNLLLoss2d
 torch.nn.PairwiseDistance                     QuantizedPairwiseDistance
 torch.nn.PoissonNLLLoss                       QuantizedPoissonNLLLoss
 torch.nn.SmoothL1Loss                         QuantizedSmoothL1Loss

@@ -589,10 +589,10 @@ def _prepare_traced_model(
                 _insert_node_for_new_module(
                     traced_model, node, new_module_qualified_name, functional_name
                 )
-                logger.info(
-                    "Functional         : Adding new module for node: {%s} ",
-                    new_module_qualified_name,
-                )
+                # logger.info(
+                #     "Functional         : Adding new module for node: {%s} ",
+                #     new_module_qualified_name,
+                # )
 
         # Create new module for reused/duplicate nodes
         elif node.target in unique_nodes:
@@ -607,10 +607,10 @@ def _prepare_traced_model(
                 _insert_node_for_new_module(
                     traced_model, node, new_module_qualified_name
                 )
-                logger.info(
-                    "Reused/Duplicate   : Adding new module for node: {%s} ",
-                    new_module_qualified_name,
-                )
+                # logger.info(
+                #     "Reused/Duplicate   : Adding new module for node: {%s} ",
+                #     new_module_qualified_name,
+                # )
         else:
             unique_nodes.add(node.target)
 

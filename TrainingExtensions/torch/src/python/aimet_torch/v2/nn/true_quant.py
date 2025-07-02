@@ -1713,15 +1713,6 @@ class QuantizedNLLLoss(_DispatchMixin, QuantizationMixin, nn.NLLLoss):
     _builtin_torch_fn = F.nll_loss
     __quant_init__ = QuantizationMixin.__unary__
 
-
-@QuantizationMixin.implements(nn.NLLLoss2d)
-class QuantizedNLLLoss2d(_DispatchMixin, QuantizationMixin, nn.NLLLoss2d):
-    # pylint: disable=missing-class-docstring
-    __doc__ = _generate_docstring(parent_cls=nn.NLLLoss2d)
-    _builtin_torch_fn = F.nll_loss
-    __quant_init__ = QuantizationMixin.__unary__
-
-
 @QuantizationMixin.implements(nn.PReLU)
 class QuantizedPReLU(_DispatchMixin, QuantizationMixin, nn.PReLU):
     # pylint: disable=missing-class-docstring

@@ -137,7 +137,6 @@ FakeQuantizedMultiLabelMarginLoss = _nn.QuantizedMultiLabelMarginLoss
 FakeQuantizedMultiLabelSoftMarginLoss = _nn.QuantizedMultiLabelSoftMarginLoss
 FakeQuantizedMultiMarginLoss = _nn.QuantizedMultiMarginLoss
 FakeQuantizedNLLLoss = _nn.QuantizedNLLLoss
-FakeQuantizedNLLLoss2d = _nn.QuantizedNLLLoss2d
 FakeQuantizedPReLU = _nn.QuantizedPReLU
 FakeQuantizedPairwiseDistance = _nn.QuantizedPairwiseDistance
 FakeQuantizedPixelShuffle = _nn.QuantizedPixelShuffle

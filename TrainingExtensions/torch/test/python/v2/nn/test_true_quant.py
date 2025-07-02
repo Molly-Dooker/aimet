@@ -1017,7 +1017,7 @@ def _create_quantized_module(module):
             ),
             # (lambda: nn.MultiheadAttention(...),            lambda: ...),
             (lambda: nn.NLLLoss(), lambda: (randn(10, 10), randint(10, (10,)))),
-            (lambda: nn.NLLLoss2d(), lambda: (randn(10, 10), randint(10, (10,)))),
+            (lambda: nn.NLLLoss(), lambda: (randn(10, 10), randint(10, (10,)))),
             (lambda: nn.PReLU(), lambda: randn(100)),
             (lambda: nn.PairwiseDistance(), lambda: (randn(100, 10), randn(100, 10))),
             # (lambda: nn.ParameterDict(...),                 lambda: ...),

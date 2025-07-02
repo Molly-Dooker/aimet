@@ -139,6 +139,7 @@ op_outputs_to_ignore = [
     "Transpose",
     "Identity",
 ]
+op_outputs_to_ignore = []
 
 # List of ops whose params are not to be quantized
 op_params_to_ignore = ["Resize"]
