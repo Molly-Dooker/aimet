@@ -1,0 +1,28 @@
+{
+    "files.associations": {
+        "core": "cpp"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.configureArgs": [
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        "-DENABLE_CUDA=ON",
+        "-DENABLE_TORCH=ON",
+        "-DENABLE_TENSORFLOW=OFF",
+        "-DENABLE_ONNX=ON",
+        "-DCMAKE_INSTALL_PREFIX=./staging/universal"
+    ],
+    "cmake.buildArgs": [
+        "-j32"
+    ],
+    "terminal.integrated.profiles.linux": {
+        "aimet_env": {
+            "path": "bash",
+            "args": [
+                "--init-file",
+                "${workspaceFolder}/packaging/envsetup.sh"
+            ],
+            "icon": "flame"
+        }
+    },
+    "terminal.integrated.defaultProfile.linux": "aimet_env"
+}
